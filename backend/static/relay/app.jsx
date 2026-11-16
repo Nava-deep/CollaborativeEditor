@@ -1,15 +1,168 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import DiffMatchPatch from 'diff-match-patch'
-import {
-  ArrowDownToLine, ChevronDown, Cloud, CloudOff,
-  FilePlus2, FileText, FolderOpen, LoaderCircle, LogOut, MoreHorizontal,
-  Pencil, Plus, Search, Settings2, Share2, Shield, Sparkles, Trash2, X,
-} from 'lucide-react'
-import { api, authenticate, clearSession, readSession, socketUrl } from './api'
-import { deleteDraft, readDashboard, readDraft, writeDashboard, writeDraft } from './offline'
+const { useCallback, useEffect, useMemo, useRef, useState } = React;
+const API_BASE = '';
 
-const dmp = new DiffMatchPatch()
+function readSession() {
+  let user = null;
+  try { user = JSON.parse(localStorage.getItem('relay.user') || 'null'); } catch { user = null; }
+  return { token: localStorage.getItem('relay.token'), user };
+}
+function saveSession(token, user) {
+  localStorage.setItem('relay.token', token);
+  localStorage.setItem('relay.user', JSON.stringify(user));
+}
+function clearSession() {
+  localStorage.removeItem('relay.token');
+  localStorage.removeItem('relay.user');
+}
+async function api(path, options = {}) {
+  const token = readSession().token;
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set('Authorization', `Token ${token}`);
+  if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const response = await fetch(`${API_BASE}/api/${path.replace(/^\//, '')}`, { ...options, headers });
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data.detail || Object.values(data).flat().join(' ') || `Request failed (${response.status})`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+async function authenticate(username, password, register = false, email = '') {
+  const response = await fetch(`${API_BASE}/api/${register ? 'register/' : 'auth/'}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, ...(register ? { email } : {}) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || Object.values(data).flat().join(' ') || 'Could not sign in.');
+  saveSession(data.token, data.user);
+  return data.user;
+}
+function socketUrl(documentId) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws/documents/${documentId}/`;
+}
+
+const DATABASE = 'relay-offline-v1';
+const STORE = 'drafts';
+let databasePromise;
+function database() {
+  if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB is not available in this browser.'));
+  if (!databasePromise) {
+    databasePromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DATABASE, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  return databasePromise;
+}
+function readDraft(key) {
+  return database().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(String(key));
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  }));
+}
+function writeDraft(key, value) {
+  return database().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readwrite').objectStore(STORE).put(value, String(key));
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  }));
+}
+function deleteDraft(key) {
+  return database().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(String(key));
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  }));
+}
+function readDashboard(userId = 'unknown') { return readDraft(`dashboard:${userId}`); }
+function writeDashboard(userId = 'unknown', value) { return writeDraft(`dashboard:${userId}`, value); }
+
+const dmp = new DiffMatchPatch();
+function makeIcon(name) {
+  return function RelayIcon({ size = 16, strokeWidth = 2, ...props }) {
+    const icon = lucide.icons[name];
+    if (!icon) return null;
+    const renderNode = (node, key) => {
+      const [tag, attributes, children] = node;
+      return React.createElement(tag, { ...attributes, key }, ...(children || []).map(renderNode));
+    };
+    const [tag, attributes, children] = icon;
+    return React.createElement(tag, { ...attributes, ...props, width: size, height: size, 'stroke-width': strokeWidth }, ...(children || []).map(renderNode));
+  };
+}
+const ArrowDownToLine = makeIcon('ArrowDownToLine');
+const ChevronDown = makeIcon('ChevronDown');
+const Cloud = makeIcon('Cloud');
+const CloudOff = makeIcon('CloudOff');
+const FilePlus2 = makeIcon('FilePlus2');
+const FileText = makeIcon('FileText');
+const FolderOpen = makeIcon('FolderOpen');
+const LoaderCircle = makeIcon('LoaderCircle');
+const LogOut = makeIcon('LogOut');
+const MoreHorizontal = makeIcon('MoreHorizontal');
+const Pencil = makeIcon('Pencil');
+const Plus = makeIcon('Plus');
+const Search = makeIcon('Search');
+const Settings2 = makeIcon('Settings2');
+const Share2 = makeIcon('Share2');
+const Shield = makeIcon('Shield');
+const Sparkles = makeIcon('Sparkles');
+const Trash2 = makeIcon('Trash2');
+const X = makeIcon('X');
+
+function navigateTo(path, replace = false) {
+  if (replace) window.history.replaceState({}, '', path);
+  else window.history.pushState({}, '', path);
+  window.dispatchEvent(new Event('popstate'));
+}
+function useCurrentPath() {
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const update = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', update);
+    return () => window.removeEventListener('popstate', update);
+  }, []);
+  return path;
+}
+function useNavigate() { return navigateTo; }
+function useParams() {
+  const match = window.location.pathname.match(/^\/docs\/(\d+)\/?$/);
+  return { id: match ? match[1] : undefined };
+}
+function Link({ to, onClick, children, ...props }) {
+  return <a href={to} {...props} onClick={(event) => {
+    onClick?.(event);
+    if (!event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      navigateTo(to);
+    }
+  }}>{children}</a>;
+}
+function Route() { return null; }
+function Routes({ children }) {
+  const path = useCurrentPath();
+  const routes = React.Children.toArray(children);
+  const selected = routes.find((route) => {
+    const routePath = route.props.path;
+    if (routePath === '*') return false;
+    if (routePath === '/docs/:id') return /^\/docs\/\d+\/?$/.test(path);
+    return routePath === path;
+  }) || routes.find((route) => route.props.path === '*');
+  return selected ? selected.props.element : null;
+}
+function Navigate({ to, replace = false }) {
+  useEffect(() => { navigateTo(to, replace); }, [to, replace]);
+  return null;
+}
+
 const palette = ['#ef8b65', '#738de0', '#57a48a', '#be83c6', '#d4a044']
 
 function mergeText(base, local, remote) {
@@ -486,4 +639,8 @@ function safeFileName(title) { return (title || 'document').trim().replace(/[^\w
 function lineAt(text, position) { return (text.slice(0, position).match(/\n/g) || []).length + 1 }
 function columnAt(text, position) { return position - text.lastIndexOf('\n', Math.max(0, position - 1)) }
 
-export default App
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));

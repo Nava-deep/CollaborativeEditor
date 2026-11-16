@@ -1,7 +1,17 @@
-const CACHE_NAME = 'relay-shell-v1'
+const CACHE_NAME = 'relay-shell-v2'
+const APP_ASSETS = [
+  '/',
+  '/static/relay/app.jsx',
+  '/static/relay/styles.css',
+  '/static/relay/vendor/react.production.min.js',
+  '/static/relay/vendor/react-dom.production.min.js',
+  '/static/relay/vendor/lucide.js',
+  '/static/relay/vendor/diff-match-patch.js',
+  '/static/relay/vendor/babel.min.js',
+]
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/index.html'])))
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_ASSETS)))
   self.skipWaiting()
 })
 
@@ -21,14 +31,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(request).then(async (response) => {
       if (response.ok) {
         const cache = await caches.open(CACHE_NAME)
-        await cache.put('/index.html', response.clone())
+        await cache.put('/', response.clone())
       }
       return response
-    }).catch(async () => (await caches.match(request)) || (await caches.match('/index.html'))))
+    }).catch(async () => (await caches.match(request)) || (await caches.match('/'))))
     return
   }
 
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith('/static/relay/')) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
       if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()))
       return response
