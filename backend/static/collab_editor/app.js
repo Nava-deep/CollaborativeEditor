@@ -147,6 +147,7 @@ const FolderOpen = makeIcon('FolderOpen');
 const LoaderCircle = makeIcon('LoaderCircle');
 const LogOut = makeIcon('LogOut');
 const MoreHorizontal = makeIcon('MoreHorizontal');
+const Star = makeIcon('Star');
 const Pencil = makeIcon('Pencil');
 const Plus = makeIcon('Plus');
 const Search = makeIcon('Search');
@@ -471,6 +472,18 @@ function Dashboard({
   const [error, setError] = useState('');
   const [menu, setMenu] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const favoritesKey = `collab-editor.favorites:${user?.id ?? 'unknown'}`;
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(favoritesKey) || '[]');
+      return Array.isArray(stored) ? stored.map(String) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showStarred, setShowStarred] = useState(false);
+  const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
   const loadDocuments = useCallback(async () => {
     try {
       const result = await api('documents/');
@@ -491,6 +504,11 @@ function Dashboard({
     if (online) loadDocuments();
   }, [online, loadDocuments]);
   useEffect(() => {
+    try {
+      localStorage.setItem(favoritesKey, JSON.stringify(favorites));
+    } catch {/* stars remain available for this session */}
+  }, [favoritesKey, favorites]);
+  useEffect(() => {
     if (menu === null) return undefined;
     function dismissMenu(event) {
       if (!event.target.closest('.doc-menu-anchor[data-open="true"]')) setMenu(null);
@@ -505,6 +523,21 @@ function Dashboard({
       document.removeEventListener('keydown', dismissOnEscape);
     };
   }, [menu]);
+  useEffect(() => {
+    if (!workspaceMenuOpen) return undefined;
+    function dismissWorkspaceMenu(event) {
+      if (!event.target.closest('.workspace-menu-wrap')) setWorkspaceMenuOpen(false);
+    }
+    function dismissOnEscape(event) {
+      if (event.key === 'Escape') setWorkspaceMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', dismissWorkspaceMenu);
+    document.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissWorkspaceMenu);
+      document.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, [workspaceMenuOpen]);
   async function createDocument() {
     setCreating(true);
     try {
@@ -522,6 +555,10 @@ function Dashboard({
       setCreating(false);
     }
   }
+  function toggleFavorite(documentId) {
+    const key = String(documentId);
+    setFavorites(old => old.includes(key) ? old.filter(item => item !== key) : [...old, key]);
+  }
   async function documentAction(action, doc) {
     setMenu(null);
     try {
@@ -536,13 +573,15 @@ function Dashboard({
           method: 'DELETE'
         });
         setDocuments(items => items.filter(item => item.id !== doc.id));
+        setFavorites(items => items.filter(item => item !== String(doc.id)));
       }
     } catch (err) {
       setError(err.message);
     }
   }
   const searchQuery = search.trim().normalize('NFKC').toLocaleLowerCase();
-  const filtered = useMemo(() => documents.filter(doc => !searchQuery || `${doc.title || ''} ${doc.owner || ''}`.normalize('NFKC').toLocaleLowerCase().includes(searchQuery)).sort((first, second) => sortNewestFirst ? new Date(second.updated_at) - new Date(first.updated_at) : new Date(first.updated_at) - new Date(second.updated_at)), [documents, searchQuery, sortNewestFirst]);
+  const filtered = useMemo(() => documents.filter(doc => (!showStarred || favoriteIds.has(String(doc.id))) && (!searchQuery || `${doc.title || ''} ${doc.owner || ''}`.normalize('NFKC').toLocaleLowerCase().includes(searchQuery))).sort((first, second) => sortNewestFirst ? new Date(second.updated_at) - new Date(first.updated_at) : new Date(first.updated_at) - new Date(second.updated_at)), [documents, searchQuery, sortNewestFirst, showStarred, favoriteIds]);
+  const favoriteCount = documents.filter(doc => favoriteIds.has(String(doc.id))).length;
   return /*#__PURE__*/React.createElement("div", {
     className: "dashboard-shell"
   }, /*#__PURE__*/React.createElement("aside", {
@@ -559,12 +598,50 @@ function Dashboard({
   }), " My workspace"), /*#__PURE__*/React.createElement("div", {
     className: "side-label"
   }, "YOUR SPACE"), /*#__PURE__*/React.createElement("div", {
-    className: "workspace-card"
+    className: "workspace-menu-wrap"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: `workspace-card ${workspaceMenuOpen ? 'is-open' : ''}`,
+    "aria-expanded": workspaceMenuOpen,
+    "aria-controls": "workspace-account-menu",
+    onClick: () => setWorkspaceMenuOpen(open => !open)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "workspace-avatar"
+  }, user?.username?.[0]?.toUpperCase() || 'Y'), /*#__PURE__*/React.createElement("span", {
+    className: "workspace-card-copy"
+  }, /*#__PURE__*/React.createElement("strong", null, user?.username || 'Your workspace'), /*#__PURE__*/React.createElement("small", null, "Personal workspace")), /*#__PURE__*/React.createElement(ChevronDown, {
+    className: "workspace-chevron",
+    size: 16
+  })), workspaceMenuOpen && /*#__PURE__*/React.createElement("div", {
+    className: "workspace-popover",
+    id: "workspace-account-menu",
+    role: "group",
+    "aria-label": "Account and workspace options"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "workspace-popover-head"
   }, /*#__PURE__*/React.createElement("div", {
     className: "workspace-avatar"
-  }, user?.username?.[0]?.toUpperCase() || 'Y'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, user?.username || 'Your workspace'), /*#__PURE__*/React.createElement("small", null, "Personal")), /*#__PURE__*/React.createElement(ChevronDown, {
-    size: 15
-  })), /*#__PURE__*/React.createElement("div", {
+  }, user?.username?.[0]?.toUpperCase() || 'Y'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, user?.username || 'Your account'), /*#__PURE__*/React.createElement("small", null, "Personal workspace"))), /*#__PURE__*/React.createElement("div", {
+    className: "workspace-popover-status"
+  }, /*#__PURE__*/React.createElement("span", null, "Connection"), /*#__PURE__*/React.createElement("strong", null, /*#__PURE__*/React.createElement("i", {
+    className: `connection-dot ${online ? 'is-online' : ''}`
+  }), online ? 'Online' : 'Offline')), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onToggleTheme();
+      setWorkspaceMenuOpen(false);
+    }
+  }, theme === 'light' ? /*#__PURE__*/React.createElement(Moon, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Sun, {
+    size: 16
+  }), /*#__PURE__*/React.createElement("span", null, "Switch to ", theme === 'light' ? 'dark' : 'light', " theme")), /*#__PURE__*/React.createElement("button", {
+    className: "workspace-signout",
+    onClick: () => {
+      setWorkspaceMenuOpen(false);
+      onSignOut();
+    }
+  }, /*#__PURE__*/React.createElement(LogOut, {
+    size: 16
+  }), /*#__PURE__*/React.createElement("span", null, "Sign out")))), /*#__PURE__*/React.createElement("div", {
     className: "sidebar-note"
   }, /*#__PURE__*/React.createElement(Sparkles, {
     size: 15
@@ -647,7 +724,23 @@ function Dashboard({
     onClick: () => setSortNewestFirst(value => !value)
   }, /*#__PURE__*/React.createElement(Settings2, {
     size: 17
-  })))), loading ? /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "library-filter-row",
+    role: "group",
+    "aria-label": "Document filters"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: `filter-chip ${!showStarred ? 'active' : ''}`,
+    "aria-pressed": !showStarred,
+    onClick: () => setShowStarred(false)
+  }, "All documents ", /*#__PURE__*/React.createElement("span", null, documents.length)), /*#__PURE__*/React.createElement("button", {
+    className: `filter-chip ${showStarred ? 'active' : ''}`,
+    "aria-pressed": showStarred,
+    onClick: () => setShowStarred(true)
+  }, /*#__PURE__*/React.createElement(Star, {
+    size: 14
+  }), " Starred ", /*#__PURE__*/React.createElement("span", null, favoriteCount)), /*#__PURE__*/React.createElement("span", {
+    className: "filter-caption"
+  }, "Your shortcuts, saved in this browser")), loading ? /*#__PURE__*/React.createElement("div", {
     className: "loading-state"
   }, /*#__PURE__*/React.createElement(LoaderCircle, {
     className: "spin"
@@ -655,9 +748,11 @@ function Dashboard({
     className: "empty-state"
   }, /*#__PURE__*/React.createElement("div", {
     className: "empty-icon"
-  }, /*#__PURE__*/React.createElement(FilePlus2, {
+  }, showStarred ? /*#__PURE__*/React.createElement(Star, {
     size: 21
-  })), /*#__PURE__*/React.createElement("h3", null, searchQuery ? 'No matching documents' : 'A blank page, full of possibility.'), /*#__PURE__*/React.createElement("p", null, searchQuery ? 'Try a different search.' : 'Start a document and invite someone in.'), !searchQuery && /*#__PURE__*/React.createElement("button", {
+  }) : /*#__PURE__*/React.createElement(FilePlus2, {
+    size: 21
+  })), /*#__PURE__*/React.createElement("h3", null, searchQuery || showStarred ? showStarred && !searchQuery ? 'No starred documents yet' : 'No matching documents' : 'A blank page, full of possibility.'), /*#__PURE__*/React.createElement("p", null, searchQuery ? 'Try a different search.' : showStarred ? 'Star a document to keep it close at hand.' : 'Start a document and invite someone in.'), !searchQuery && !showStarred && /*#__PURE__*/React.createElement("button", {
     className: "button secondary",
     onClick: createDocument
   }, /*#__PURE__*/React.createElement(Plus, {
@@ -673,6 +768,16 @@ function Dashboard({
     className: `doc-icon doc-color-${index % 4}`
   }, /*#__PURE__*/React.createElement(FileText, {
     size: 18
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "doc-card-actions"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: `icon-btn favorite-btn ${favoriteIds.has(String(doc.id)) ? 'is-favorite' : ''}`,
+    "aria-label": favoriteIds.has(String(doc.id)) ? `Unstar ${doc.title || 'document'}` : `Star ${doc.title || 'document'}`,
+    "aria-pressed": favoriteIds.has(String(doc.id)),
+    title: favoriteIds.has(String(doc.id)) ? 'Remove from starred' : 'Add to starred',
+    onClick: () => toggleFavorite(doc.id)
+  }, /*#__PURE__*/React.createElement(Star, {
+    size: 16
   })), /*#__PURE__*/React.createElement("div", {
     className: "doc-menu-anchor",
     "data-open": menu === doc.id ? 'true' : 'false'
@@ -698,7 +803,7 @@ function Dashboard({
     onClick: () => documentAction('delete', doc)
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 14
-  }), "Delete")))), /*#__PURE__*/React.createElement("button", {
+  }), "Delete"))))), /*#__PURE__*/React.createElement("button", {
     className: "doc-card-body",
     onClick: () => navigate(`/docs/${doc.id}`)
   }, /*#__PURE__*/React.createElement("strong", null, doc.title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, ['owner', 'full'].includes(doc.access) ? 'Your document' : `Shared by ${doc.owner}`, " \xB7 ", relativeTime(doc.updated_at))), /*#__PURE__*/React.createElement("div", {
@@ -1327,15 +1432,9 @@ function Editor({
     onClick: () => setError('')
   }, /*#__PURE__*/React.createElement(X, {
     size: 14
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), !canWrite && /*#__PURE__*/React.createElement("div", {
     className: "editor-tools"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "live-editor-label"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "live-dot"
-  }), "Live cursors"), /*#__PURE__*/React.createElement("span", {
-    className: "tool-spacer"
-  }), !canWrite && /*#__PURE__*/React.createElement("span", {
     className: "read-only-label"
   }, /*#__PURE__*/React.createElement(Shield, {
     size: 13

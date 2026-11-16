@@ -117,11 +117,64 @@ html[data-theme="dark"] .title-display:hover{color:#fff}
 .remote-caret::before{content:"";position:absolute;left:-1px;top:.1em;height:1.25em;border-left:2px solid var(--cursor-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--cursor-color) 16%,transparent)}
 .remote-caret-label{position:absolute;z-index:4;left:-1px;top:calc(-1.45em - var(--cursor-label-stack, 0em));display:block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 7px;border-radius:5px 5px 5px 0;background:var(--cursor-color);color:#fff;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;line-height:1.2;box-shadow:0 2px 7px #17241c24}
 .remote-caret.is-self{--cursor-color:#4f9c6d}
-.live-editor-label{display:inline-flex;align-items:center;gap:8px;color:#78867d;font-size:14px;font-weight:600}
-.live-dot{width:8px;height:8px;border-radius:50%;background:#61ae7c;box-shadow:0 0 0 4px #61ae7c20}
 .presence-row.is-editing .presence-avatar{box-shadow:0 0 0 2px #76b58b80}
 html[data-theme="dark"] .writing-overlay{color:#dde6e0}
 html[data-theme="dark"] .writing-placeholder{color:#87968c}
 html[data-theme="dark"] .writing-area{caret-color:transparent!important}
-html[data-theme="dark"] .live-editor-label{color:#bac7be}
 @media(max-width:760px){.writing-layer{height:55vh;min-height:360px}.writing-overlay,.writing-area{font-size:17px}.title-input,.title-display{font-size:15px}.editor-main{font-size:15px}}
+
+
+/* Workspace shortcuts and the account menu. */
+.workspace-menu-wrap{position:relative;z-index:15}
+.workspace-card{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:background .18s,border-color .18s,box-shadow .18s}
+.workspace-card:hover,.workspace-card.is-open{background:#f5f8f5;border-color:#d6e3d9;box-shadow:0 3px 12px #3043370c}
+.workspace-chevron{flex-shrink:0;color:#8d9991;transition:transform .18s}
+.workspace-card.is-open .workspace-chevron{transform:rotate(180deg)}
+.workspace-popover{position:absolute;top:calc(100% + 9px);left:0;z-index:40;width:265px;padding:12px;background:#fff;border:1px solid #e5ebe6;border-radius:13px;box-shadow:0 16px 38px #1d2b2226;animation:menu-arrive .16s ease-out both}
+.workspace-popover-head{display:flex;align-items:center;gap:10px;padding:4px 4px 12px;border-bottom:1px solid #eef1ee}
+.workspace-popover-head>div:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.workspace-popover-head strong{font-size:15px;color:#344039;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-popover-head small{font-size:12px;color:#98a39b}
+.workspace-popover-status{display:flex;align-items:center;justify-content:space-between;padding:12px 4px;color:#929e96;font-size:13px}
+.workspace-popover-status strong{display:flex;align-items:center;gap:7px;color:#607367;font-size:13px;font-weight:600}
+.workspace-popover-status .connection-dot{display:inline-block}
+.workspace-popover>button{width:100%;display:flex;align-items:center;gap:10px;padding:10px 9px;border:0;border-radius:8px;background:transparent;color:#59675e;text-align:left;font-size:14px}
+.workspace-popover>button:hover{background:#f2f6f2;color:#385543}
+.workspace-popover>button span{flex:1}
+.workspace-popover>button.workspace-signout{border-top:1px solid #eef1ee;border-radius:0 0 8px 8px;margin-top:4px;padding-top:12px;color:#a45d53}
+.library-filter-row{display:flex;align-items:center;gap:8px;margin:-5px 0 17px;min-height:34px}
+.filter-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid #e5eae6;border-radius:8px;background:#fff;color:#77837a;font-size:13px;font-weight:600;transition:background .18s,border-color .18s,color .18s,transform .18s}
+.filter-chip:hover{transform:translateY(-1px);border-color:#c8d7cc;color:#4b6554}
+.filter-chip.active{background:#eaf2ec;border-color:#d9e8dc;color:#41614c}
+.filter-chip span{min-width:19px;padding:2px 5px;border-radius:6px;background:#f0f3f0;color:#87928a;font-size:11px;text-align:center}
+.filter-chip.active span{background:#d9e8dd;color:#4b7157}
+.filter-chip svg{color:#b18a46}
+.filter-caption{margin-left:auto;color:#9ba59e;font-size:12px}
+.doc-card-actions{display:flex;align-items:center;gap:3px}
+.favorite-btn{width:28px;height:28px;color:#9da69f;opacity:.62;transition:opacity .16s,color .16s,background .16s}
+.doc-card:hover .favorite-btn,.favorite-btn.is-favorite{opacity:1}
+.favorite-btn:hover{background:#fbf6e9;color:#b58b36}
+.favorite-btn.is-favorite{color:#c29334}
+.favorite-btn.is-favorite svg{fill:#e9cb7d;stroke:#a77e28}
+.doc-card-actions .doc-menu-anchor{display:flex;align-items:center}
+@keyframes menu-arrive{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+html[data-theme="dark"] .workspace-card:hover,html[data-theme="dark"] .workspace-card.is-open{background:#29392f!important;border-color:#405447!important}
+html[data-theme="dark"] .workspace-popover{background:#202d26;border-color:#3a493f;box-shadow:0 18px 42px #050a0760}
+html[data-theme="dark"] .workspace-popover-head{border-color:#36443a}
+html[data-theme="dark"] .workspace-popover-head strong{color:#e1e9e3}
+html[data-theme="dark"] .workspace-popover-status{color:#a1afa5}
+html[data-theme="dark"] .workspace-popover-status strong{color:#c8d8cc}
+html[data-theme="dark"] .workspace-popover>button{color:#c5d1c8}
+html[data-theme="dark"] .workspace-popover>button:hover{background:#2a3a30;color:#e6eee8}
+html[data-theme="dark"] .workspace-popover>button.workspace-signout{border-color:#36443a;color:#e49b8e}
+html[data-theme="dark"] .filter-chip{background:#202d26;border-color:#39483e;color:#bac7be}
+html[data-theme="dark"] .filter-chip.active{background:#2b4032;border-color:#435c49;color:#d6e6d9}
+html[data-theme="dark"] .filter-chip span{background:#303e35;color:#bcc9c0}
+html[data-theme="dark"] .filter-chip.active span{background:#3a5542;color:#d8e8db}
+html[data-theme="dark"] .filter-caption{color:#8f9f94}
+html[data-theme="dark"] .favorite-btn{color:#9ba99f}
+html[data-theme="dark"] .favorite-btn:hover{background:#3d392a;color:#e2c16f}
+html[data-theme="dark"] .favorite-btn.is-favorite{color:#e2c16f}
+@media(max-width:760px){.filter-caption{display:none}.library-filter-row{margin-top:0}.workspace-popover{left:0;max-width:min(265px,calc(100vw - 82px))}.doc-card-actions .favorite-btn{opacity:1}}
+
+.workspace-card-copy{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}

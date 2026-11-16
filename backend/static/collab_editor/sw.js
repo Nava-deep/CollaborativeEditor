@@ -1,4 +1,4 @@
-const CACHE_NAME = 'collab-editor-shell-v3'
+const CACHE_NAME = 'collab-editor-shell-v4'
 const APP_ASSETS = [
   '/',
   '/static/collab_editor/app.js',
