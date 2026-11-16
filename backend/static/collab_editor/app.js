@@ -224,6 +224,34 @@ function Navigate({
   return null;
 }
 const palette = ['#ef8b65', '#738de0', '#57a48a', '#be83c6', '#d4a044'];
+function renderCursorOverlay(text, markers) {
+  const ordered = markers.map(marker => ({
+    ...marker,
+    position: Math.max(0, Math.min(text.length, Number(marker.position) || 0))
+  })).sort((first, second) => first.position - second.position);
+  const nodes = [];
+  let offset = 0;
+  let previousPosition = -1;
+  let stack = 0;
+  ordered.forEach(marker => {
+    if (marker.position > offset) nodes.push(text.slice(offset, marker.position));
+    stack = marker.position === previousPosition ? stack + 1 : 0;
+    nodes.push(/*#__PURE__*/React.createElement("span", {
+      key: marker.key,
+      className: `remote-caret ${marker.self ? 'is-self' : ''}`,
+      style: {
+        '--cursor-color': marker.color,
+        '--cursor-label-stack': `${stack * 1.5}em`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "remote-caret-label"
+    }, marker.username)));
+    previousPosition = marker.position;
+    offset = marker.position;
+  });
+  if (offset < text.length) nodes.push(text.slice(offset));
+  return nodes;
+}
 function mergeText(base, local, remote) {
   if (local === base) return remote;
   if (remote === base) return local;
@@ -235,15 +263,39 @@ function mergeText(base, local, remote) {
 function App() {
   const [session, setSession] = useState(readSession);
   const [online, setOnline] = useState(navigator.onLine);
-  const [theme, setTheme] = useState(() => localStorage.getItem('collab-editor.theme') || 'light');
+  const [theme, setTheme] = useState(() => {
+    let saved = 'light';
+    try {
+      saved = localStorage.getItem('collab-editor.theme') === 'dark' ? 'dark' : 'light';
+    } catch {/* use the accessible light default */}
+    document.documentElement.dataset.theme = saved;
+    document.body.dataset.theme = saved;
+    return saved;
+  });
   const toggleTheme = useCallback(() => setTheme(current => {
     const next = current === 'light' ? 'dark' : 'light';
-    localStorage.setItem('collab-editor.theme', next);
+    try {
+      localStorage.setItem('collab-editor.theme', next);
+    } catch {/* theme still applies for this session */}
+    document.documentElement.dataset.theme = next;
+    document.body.dataset.theme = next;
     return next;
   }), []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = theme === 'dark' ? '#17211c' : '#f7f8fa';
   }, [theme]);
+  useEffect(() => {
+    function dismissMenus(event) {
+      document.querySelectorAll('.more-menu-wrap[open]').forEach(dropdown => {
+        if (!dropdown.contains(event.target)) dropdown.open = false;
+      });
+    }
+    document.addEventListener('pointerdown', dismissMenus);
+    return () => document.removeEventListener('pointerdown', dismissMenus);
+  }, []);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -438,6 +490,21 @@ function Dashboard({
   useEffect(() => {
     if (online) loadDocuments();
   }, [online, loadDocuments]);
+  useEffect(() => {
+    if (menu === null) return undefined;
+    function dismissMenu(event) {
+      if (!event.target.closest('.doc-menu-anchor[data-open="true"]')) setMenu(null);
+    }
+    function dismissOnEscape(event) {
+      if (event.key === 'Escape') setMenu(null);
+    }
+    document.addEventListener('pointerdown', dismissMenu);
+    document.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissMenu);
+      document.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, [menu]);
   async function createDocument() {
     setCreating(true);
     try {
@@ -474,7 +541,8 @@ function Dashboard({
       setError(err.message);
     }
   }
-  const filtered = useMemo(() => documents.filter(doc => doc.title.toLowerCase().includes(search.toLowerCase())).sort((first, second) => sortNewestFirst ? new Date(second.updated_at) - new Date(first.updated_at) : new Date(first.updated_at) - new Date(second.updated_at)), [documents, search, sortNewestFirst]);
+  const searchQuery = search.trim().normalize('NFKC').toLocaleLowerCase();
+  const filtered = useMemo(() => documents.filter(doc => !searchQuery || `${doc.title || ''} ${doc.owner || ''}`.normalize('NFKC').toLocaleLowerCase().includes(searchQuery)).sort((first, second) => sortNewestFirst ? new Date(second.updated_at) - new Date(first.updated_at) : new Date(first.updated_at) - new Date(second.updated_at)), [documents, searchQuery, sortNewestFirst]);
   return /*#__PURE__*/React.createElement("div", {
     className: "dashboard-shell"
   }, /*#__PURE__*/React.createElement("aside", {
@@ -567,6 +635,8 @@ function Dashboard({
   }, /*#__PURE__*/React.createElement(Search, {
     size: 16
   }), /*#__PURE__*/React.createElement("input", {
+    type: "search",
+    "aria-label": "Filter documents by title or owner",
     placeholder: "Find a document",
     value: search,
     onChange: e => setSearch(e.target.value)
@@ -587,7 +657,7 @@ function Dashboard({
     className: "empty-icon"
   }, /*#__PURE__*/React.createElement(FilePlus2, {
     size: 21
-  })), /*#__PURE__*/React.createElement("h3", null, search ? 'No matching documents' : 'A blank page, full of possibility.'), /*#__PURE__*/React.createElement("p", null, search ? 'Try a different search.' : 'Start a document and invite someone in.'), !search && /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement("h3", null, searchQuery ? 'No matching documents' : 'A blank page, full of possibility.'), /*#__PURE__*/React.createElement("p", null, searchQuery ? 'Try a different search.' : 'Start a document and invite someone in.'), !searchQuery && /*#__PURE__*/React.createElement("button", {
     className: "button secondary",
     onClick: createDocument
   }, /*#__PURE__*/React.createElement(Plus, {
@@ -603,8 +673,13 @@ function Dashboard({
     className: `doc-icon doc-color-${index % 4}`
   }, /*#__PURE__*/React.createElement(FileText, {
     size: 18
-  })), /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "doc-menu-anchor",
+    "data-open": menu === doc.id ? 'true' : 'false'
+  }, /*#__PURE__*/React.createElement("button", {
     className: "icon-btn more-btn",
+    "aria-label": `Options for ${doc.title || 'document'}`,
+    "aria-expanded": menu === doc.id,
     onClick: () => setMenu(menu === doc.id ? null : doc.id)
   }, /*#__PURE__*/React.createElement(MoreHorizontal, {
     size: 18
@@ -623,7 +698,7 @@ function Dashboard({
     onClick: () => documentAction('delete', doc)
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 14
-  }), "Delete"))), /*#__PURE__*/React.createElement("button", {
+  }), "Delete")))), /*#__PURE__*/React.createElement("button", {
     className: "doc-card-body",
     onClick: () => navigate(`/docs/${doc.id}`)
   }, /*#__PURE__*/React.createElement("strong", null, doc.title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, ['owner', 'full'].includes(doc.access) ? 'Your document' : `Shared by ${doc.owner}`, " \xB7 ", relativeTime(doc.updated_at))), /*#__PURE__*/React.createElement("div", {
@@ -658,10 +733,7 @@ function Editor({
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [titleEditing, setTitleEditing] = useState(false);
-  const [localCursor, setLocalCursor] = useState({
-    line: 1,
-    column: 1
-  });
+  const [localCursorOffset, setLocalCursorOffset] = useState(0);
   const [access, setAccess] = useState('read');
   const [status, setStatus] = useState('Loading document');
   const [people, setPeople] = useState([]);
@@ -685,6 +757,7 @@ function Editor({
   const storeDraftRef = useRef(null);
   const inFlightRef = useRef(null);
   const allowReconnectRef = useRef(false);
+  const overlayRef = useRef(null);
   const localEditRef = useRef(false);
   const canWrite = ['owner', 'write', 'full'].includes(access);
   const canManage = access === 'owner' || access === 'full';
@@ -1022,10 +1095,7 @@ function Editor({
   }
   function sendCursor(target) {
     const position = target.selectionEnd;
-    setLocalCursor({
-      line: lineAt(contentRef.current, position),
-      column: columnAt(contentRef.current, position)
-    });
+    setLocalCursorOffset(position);
     const socket = socketRef.current;
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({
       type: 'cursor.update',
@@ -1108,6 +1178,18 @@ function Editor({
     URL.revokeObjectURL(anchor.href);
   }
   const cursorPeople = Object.values(cursors).filter(cursor => cursor.user_id !== user?.id);
+  const cursorMarkers = [{
+    key: 'self',
+    username: user?.username || 'You',
+    position: content ? localCursorOffset : 0,
+    color: '#4f9c6d',
+    self: true
+  }, ...cursorPeople.map(person => ({
+    key: person.user_id,
+    username: person.username || 'Collaborator',
+    position: content ? person.head : 0,
+    color: palette[person.user_id % palette.length]
+  }))];
   if (!document) return /*#__PURE__*/React.createElement("div", {
     className: "editor-loading"
   }, /*#__PURE__*/React.createElement(LoaderCircle, {
@@ -1188,9 +1270,13 @@ function Editor({
   }, /*#__PURE__*/React.createElement(Share2, {
     size: 16
   }), " Share"), /*#__PURE__*/React.createElement("details", {
-    className: "more-menu-wrap"
+    className: "more-menu-wrap",
+    onClick: event => {
+      if (event.target.closest('.floating-menu button')) event.currentTarget.open = false;
+    }
   }, /*#__PURE__*/React.createElement("summary", {
-    className: "icon-btn bordered"
+    className: "icon-btn bordered",
+    "aria-label": "Document options"
   }, /*#__PURE__*/React.createElement(MoreHorizontal, {
     size: 19
   })), /*#__PURE__*/React.createElement("div", {
@@ -1244,31 +1330,42 @@ function Editor({
   }))), /*#__PURE__*/React.createElement("div", {
     className: "editor-tools"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "cursor-location self-cursor"
-  }, /*#__PURE__*/React.createElement("i", null), user?.username || 'You', " ", /*#__PURE__*/React.createElement("b", null, "Line ", localCursor.line), /*#__PURE__*/React.createElement("b", null, "Col ", localCursor.column)), cursorPeople.map(person => /*#__PURE__*/React.createElement("span", {
-    className: "cursor-location remote-cursor",
-    key: person.user_id,
-    style: {
-      '--cursor-color': palette[person.user_id % palette.length]
-    }
-  }, /*#__PURE__*/React.createElement("i", null), person.username, /*#__PURE__*/React.createElement("b", null, "Line ", lineAt(content, person.head)), /*#__PURE__*/React.createElement("b", null, "Col ", columnAt(content, person.head)))), /*#__PURE__*/React.createElement("span", {
+    className: "live-editor-label"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "live-dot"
+  }), "Live cursors"), /*#__PURE__*/React.createElement("span", {
     className: "tool-spacer"
   }), !canWrite && /*#__PURE__*/React.createElement("span", {
     className: "read-only-label"
   }, /*#__PURE__*/React.createElement(Shield, {
     size: 13
-  }), " Read only")), /*#__PURE__*/React.createElement("textarea", {
+  }), " Read only")), /*#__PURE__*/React.createElement("div", {
+    className: "writing-layer"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "writing-overlay",
+    ref: overlayRef,
+    "aria-hidden": "true"
+  }, renderCursorOverlay(content || ' ', cursorMarkers), !content && /*#__PURE__*/React.createElement("span", {
+    className: "writing-placeholder"
+  }, canWrite ? 'Start with a thought…' : 'This document is empty.')), /*#__PURE__*/React.createElement("textarea", {
     className: "writing-area",
     spellCheck: true,
     maxLength: 2000000,
     value: content,
     readOnly: !canWrite,
     onChange: e => changeContent(e.target.value),
+    onFocus: e => sendCursor(e.currentTarget),
     onSelect: e => sendCursor(e.target),
     onKeyUp: e => sendCursor(e.currentTarget),
-    placeholder: canWrite ? 'Start with a thought…' : 'This document is empty.',
+    onScroll: e => {
+      if (overlayRef.current) {
+        overlayRef.current.scrollTop = e.currentTarget.scrollTop;
+        overlayRef.current.scrollLeft = e.currentTarget.scrollLeft;
+      }
+    },
+    placeholder: "",
     "aria-label": "Shared document editor"
-  }), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     className: "editor-bottom"
   }, /*#__PURE__*/React.createElement("span", null, content.trim() ? `${content.trim().split(/\s+/).length} words` : 'No words yet'), /*#__PURE__*/React.createElement("span", null, content.length, " characters"))), /*#__PURE__*/React.createElement("aside", {
     className: "editor-aside"
@@ -1285,16 +1382,14 @@ function Editor({
   })), people.filter(person => person.user_id !== user?.id).map(person => {
     const cursor = cursors[person.user_id];
     return /*#__PURE__*/React.createElement("div", {
-      className: `presence-row ${cursor ? 'cursor-row-active' : ''}`,
+      className: `presence-row ${cursor ? 'is-editing' : ''}`,
       key: person.user_id
     }, /*#__PURE__*/React.createElement("span", {
       className: "presence-avatar",
       style: {
         backgroundColor: palette[person.user_id % palette.length]
       }
-    }, person.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, person.username), /*#__PURE__*/React.createElement("small", null, cursor ? /*#__PURE__*/React.createElement("span", {
-      className: "location-highlight"
-    }, "Row ", lineAt(content, cursor.head), " \xB7 Col ", columnAt(content, cursor.head)) : 'Finding a place…')), /*#__PURE__*/React.createElement("span", {
+    }, person.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, person.username), /*#__PURE__*/React.createElement("small", null, cursor ? 'Editing now' : 'Viewing document')), /*#__PURE__*/React.createElement("span", {
       className: "live-pip"
     }));
   })), /*#__PURE__*/React.createElement("div", {
@@ -1414,12 +1509,6 @@ function relativeTime(value) {
 }
 function safeFileName(title) {
   return (title || 'document').trim().replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'document';
-}
-function lineAt(text, position) {
-  return (text.slice(0, position).match(/\n/g) || []).length + 1;
-}
-function columnAt(text, position) {
-  return position - text.lastIndexOf('\n', Math.max(0, position - 1));
 }
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
