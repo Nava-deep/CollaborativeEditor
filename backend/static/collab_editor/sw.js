@@ -1,13 +1,12 @@
-const CACHE_NAME = 'relay-shell-v2'
+const CACHE_NAME = 'collab-editor-shell-v1'
 const APP_ASSETS = [
   '/',
-  '/static/relay/app.jsx',
-  '/static/relay/styles.css',
-  '/static/relay/vendor/react.production.min.js',
-  '/static/relay/vendor/react-dom.production.min.js',
-  '/static/relay/vendor/lucide.js',
-  '/static/relay/vendor/diff-match-patch.js',
-  '/static/relay/vendor/babel.min.js',
+  '/static/collab_editor/app.js',
+  '/static/collab_editor/styles.css',
+  '/static/collab_editor/vendor/react.production.min.js',
+  '/static/collab_editor/vendor/react-dom.production.min.js',
+  '/static/collab_editor/vendor/lucide.js',
+  '/static/collab_editor/vendor/diff-match-patch.js',
 ]
 
 self.addEventListener('install', (event) => {
@@ -17,7 +16,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('relay-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('collab-editor-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
   )
   self.clients.claim()
 })
@@ -38,7 +37,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (url.pathname.startsWith('/static/relay/')) {
+  if (url.pathname.startsWith('/static/collab_editor/')) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
       if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()))
       return response

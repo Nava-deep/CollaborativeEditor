@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from django.contrib import admin
+from django.http import FileResponse
 from django.shortcuts import render
 from django.urls import include, path, re_path
 from rest_framework.routers import DefaultRouter
@@ -15,7 +18,8 @@ def editor_app(request, **kwargs):
 
 
 def service_worker(request):
-    response = render(request, "sw.js", content_type="application/javascript")
+    worker = Path(__file__).resolve().parent.parent / "static" / "collab_editor" / "sw.js"
+    response = FileResponse(worker.open("rb"), content_type="application/javascript")
     response["Service-Worker-Allowed"] = "/"
     response["Cache-Control"] = "no-cache"
     return response
