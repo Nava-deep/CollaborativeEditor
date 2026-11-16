@@ -13,10 +13,12 @@ class DocumentAccessTests(APITestCase):
         self.owner = User.objects.create_user(username="owner", password="safepassword123")
         self.writer = User.objects.create_user(username="writer", password="safepassword123")
         self.reader = User.objects.create_user(username="reader", password="safepassword123")
+        self.manager = User.objects.create_user(username="manager", password="safepassword123")
         self.blocked = User.objects.create_user(username="blocked", password="safepassword123")
         self.document = Document.objects.create(owner=self.owner, title="Planning", content="First draft")
         DocumentMembership.objects.create(document=self.document, user=self.writer, access="write")
         DocumentMembership.objects.create(document=self.document, user=self.reader, access="read")
+        DocumentMembership.objects.create(document=self.document, user=self.manager, access="full")
         DocumentMembership.objects.create(document=self.document, user=self.blocked, access="none")
 
     def authenticate(self, user):
@@ -65,3 +67,12 @@ class DocumentAccessTests(APITestCase):
         self.authenticate(self.owner)
         row = self.client.get(reverse("document-list")).data["results"][0]
         self.assertNotIn("content", row)
+
+    def test_full_access_can_edit_delete_and_manage_members(self):
+        self.authenticate(self.manager)
+        detail = reverse("document-detail", args=(self.document.id,))
+        share_url = reverse("document-share", args=(self.document.id,))
+        self.assertEqual(self.client.patch(detail, {"content": "Manager edit"}, format="json").status_code, 200)
+        self.assertEqual(self.client.post(share_url, {"username": "reader", "access": "write"}, format="json").status_code, 200)
+        self.assertEqual(self.client.delete(share_url, {"username": "writer"}, format="json").status_code, 204)
+        self.assertEqual(self.client.delete(detail).status_code, 204)

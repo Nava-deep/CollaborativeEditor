@@ -10,13 +10,13 @@ The app uses React for its interface and is served by Django. You do not need to
 
 Edits appear for collaborators as they happen. Collab Editor shows who is in a document and where they are working, so everyone can follow along.
 
-Document owners control access. They can invite someone to edit, allow someone to read, or remove their access. Editors can make changes, while viewers can read without changing the document.
+Document owners control access. They can invite someone to read, edit, or manage the document with full access, and remove access at any time. Full access includes document deletion and sharing controls.
 
 ## Keep writing offline
 
 If your connection drops or your device shuts down, Collab Editor keeps a draft in your browser. When you reconnect, it brings your saved work together with the latest document so you can continue.
 
-Collab Editor also helps keep saving lightweight: edits are gathered briefly while you write, reducing extra save traffic without making you wait to see your work.
+Collab Editor also helps keep saving lightweight: edits are gathered briefly while you write, reducing extra save traffic without making you wait to see your work. Choose a light or dark theme and rename a document by double-clicking its title.
 
 ## Your documents
 

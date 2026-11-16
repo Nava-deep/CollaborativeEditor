@@ -57,7 +57,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Document.objects.filter(
-            Q(owner=user) | Q(memberships__user=user, memberships__access__in=("read", "write"))
+            Q(owner=user) | Q(memberships__user=user, memberships__access__in=("read", "write", "full"))
         ).select_related("owner").prefetch_related("memberships")
         if self.action == "list":
             return queryset.defer("content")
@@ -76,8 +76,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return membership.access if membership else "none"
 
     def check_write_access(self, document):
-        if self._access(document) not in ("owner", "write"):
+        if self._access(document) not in ("owner", "write", "full"):
             raise PermissionDenied("You have read-only access to this document.")
+
+    def check_full_access(self, document):
+        if self._access(document) not in ("owner", "full"):
+            raise PermissionDenied("Only the owner or a full-access collaborator can do this.")
 
     def update(self, request, *args, **kwargs):
         self.check_write_access(self.get_object())
@@ -89,8 +93,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         document = self.get_object()
-        if document.owner_id != request.user.id:
-            raise PermissionDenied("Only the owner can delete this document.")
+        self.check_full_access(document)
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
 
@@ -111,14 +114,28 @@ class DocumentViewSet(viewsets.ModelViewSet):
         )
         return response.Response(DocumentSerializer(clone, context=self.get_serializer_context()).data, status=status.HTTP_201_CREATED)
 
-    @decorators.action(detail=True, methods=("get", "post"), url_path="share")
+    @decorators.action(detail=True, methods=("get", "post", "delete"), url_path="share")
     def share(self, request, pk=None):
         document = self.get_object()
-        if document.owner_id != request.user.id:
-            raise PermissionDenied("Only the owner can manage sharing.")
+        self.check_full_access(document)
         if request.method == "GET":
             members = document.memberships.select_related("user").all()
             return response.Response(MembershipSerializer(members, many=True).data)
+
+        if request.method == "DELETE":
+            username = str(request.data.get("username", "")).strip()
+            membership = document.memberships.select_related("user").filter(user__username__iexact=username).first()
+            if not membership:
+                raise ValidationError({"username": "This user does not have an explicit access entry."})
+            membership.delete()
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+
+            async_to_sync(get_channel_layer().group_send)(
+                f"document_{document.id}",
+                {"type": "access.changed", "user_id": membership.user_id, "access": "none"},
+            )
+            return response.Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = ShareRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -128,7 +145,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             user = User.objects.get(username__iexact=username)
         except User.DoesNotExist:
             raise ValidationError({"username": "No account exists with that username."})
-        if user.id == request.user.id:
+        if user.id == document.owner_id:
             raise ValidationError({"username": "The owner already has full access."})
         membership, _ = DocumentMembership.objects.update_or_create(
             document=document,

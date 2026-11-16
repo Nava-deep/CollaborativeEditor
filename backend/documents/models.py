@@ -22,6 +22,7 @@ class DocumentMembership(models.Model):
     class Access(models.TextChoices):
         READ = "read", "Can read"
         WRITE = "write", "Can write"
+        FULL = "full", "Full access"
         NONE = "none", "No access"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="memberships")

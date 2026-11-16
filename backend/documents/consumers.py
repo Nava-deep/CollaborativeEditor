@@ -25,7 +25,7 @@ class DocumentConsumer(AsyncJsonWebsocketConsumer):
                 await self.close(code=4401)
             return
         if event_type == "content.update":
-            if self.access not in ("owner", "write"):
+            if self.access not in ("owner", "write", "full"):
                 await self.send_json({"type": "permission.denied", "detail": "Your access is read only."})
                 return
             from channels.db import database_sync_to_async
@@ -87,7 +87,7 @@ class DocumentConsumer(AsyncJsonWebsocketConsumer):
             return user, access, {"content": document.content, "version": document.version, "title": document.title}
 
         user, access, snapshot = await get_user_and_access()
-        if access not in ("owner", "write", "read"):
+        if access not in ("owner", "write", "read", "full"):
             await self.send_json({"type": "auth.error", "detail": "This account cannot access the document."})
             await self.close(code=4403)
             return

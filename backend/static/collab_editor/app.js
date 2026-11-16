@@ -113,7 +113,7 @@ function writeDashboard(userId = 'unknown', value) {
 }
 const dmp = new DiffMatchPatch();
 function makeIcon(name) {
-  return function CollabEditorIcon({
+  return function RelayIcon({
     size = 16,
     strokeWidth = 2,
     ...props
@@ -156,6 +156,8 @@ const Shield = makeIcon('Shield');
 const Sparkles = makeIcon('Sparkles');
 const Trash2 = makeIcon('Trash2');
 const X = makeIcon('X');
+const Moon = makeIcon('Moon');
+const Sun = makeIcon('Sun');
 function navigateTo(path, replace = false) {
   if (replace) window.history.replaceState({}, '', path);else window.history.pushState({}, '', path);
   window.dispatchEvent(new Event('popstate'));
@@ -233,6 +235,15 @@ function mergeText(base, local, remote) {
 function App() {
   const [session, setSession] = useState(readSession);
   const [online, setOnline] = useState(navigator.onLine);
+  const [theme, setTheme] = useState(() => localStorage.getItem('collab-editor.theme') || 'light');
+  const toggleTheme = useCallback(() => setTheme(current => {
+    const next = current === 'light' ? 'dark' : 'light';
+    localStorage.setItem('collab-editor.theme', next);
+    return next;
+  }), []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -263,6 +274,8 @@ function App() {
     });
   }, []);
   if (!session.token) return /*#__PURE__*/React.createElement(AuthPage, {
+    theme: theme,
+    onToggleTheme: toggleTheme,
     onAuthenticated: user => setSession({
       token: readSession().token,
       user
@@ -273,6 +286,8 @@ function App() {
     element: /*#__PURE__*/React.createElement(Dashboard, {
       user: session.user,
       online: online,
+      theme: theme,
+      onToggleTheme: toggleTheme,
       onSignOut: signOut
     })
   }), /*#__PURE__*/React.createElement(Route, {
@@ -280,6 +295,8 @@ function App() {
     element: /*#__PURE__*/React.createElement(Editor, {
       user: session.user,
       online: online,
+      theme: theme,
+      onToggleTheme: toggleTheme,
       onSignOut: signOut
     })
   }), /*#__PURE__*/React.createElement(Route, {
@@ -291,6 +308,8 @@ function App() {
   }));
 }
 function AuthPage({
+  theme,
+  onToggleTheme,
   onAuthenticated
 }) {
   const [register, setRegister] = useState(false);
@@ -315,7 +334,15 @@ function AuthPage({
   }
   return /*#__PURE__*/React.createElement("main", {
     className: "auth-shell"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "theme-toggle auth-theme-toggle",
+    onClick: onToggleTheme,
+    "aria-label": `Switch to ${theme === 'light' ? 'dark' : 'light'} mode`
+  }, theme === 'light' ? /*#__PURE__*/React.createElement(Moon, {
+    size: 17
+  }) : /*#__PURE__*/React.createElement(Sun, {
+    size: 17
+  }), /*#__PURE__*/React.createElement("span", null, theme === 'light' ? 'Dark mode' : 'Light mode')), /*#__PURE__*/React.createElement("div", {
     className: "auth-brand"
   }, /*#__PURE__*/React.createElement("div", {
     className: "brand-mark"
@@ -380,6 +407,8 @@ function AuthPage({
 function Dashboard({
   user,
   online,
+  theme,
+  onToggleTheme,
   onSignOut
 }) {
   const navigate = useNavigate();
@@ -488,7 +517,15 @@ function Dashboard({
     className: "breadcrumbs"
   }, "Workspace ", /*#__PURE__*/React.createElement("span", null, "/"), " My documents"), /*#__PURE__*/React.createElement("div", {
     className: "top-actions"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "theme-toggle",
+    onClick: onToggleTheme,
+    "aria-label": `Switch to ${theme === 'light' ? 'dark' : 'light'} mode`
+  }, theme === 'light' ? /*#__PURE__*/React.createElement(Moon, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Sun, {
+    size: 16
+  }), /*#__PURE__*/React.createElement("span", null, theme === 'light' ? 'Dark' : 'Light')), /*#__PURE__*/React.createElement("div", {
     className: "user-avatar",
     title: user?.username
   }, user?.username?.[0]?.toUpperCase() || 'Y'))), /*#__PURE__*/React.createElement("div", {
@@ -581,7 +618,7 @@ function Dashboard({
     onClick: () => documentAction('duplicate', doc)
   }, /*#__PURE__*/React.createElement(FilePlus2, {
     size: 14
-  }), "Duplicate"), doc.access === 'owner' && /*#__PURE__*/React.createElement("button", {
+  }), "Duplicate"), ['owner', 'full'].includes(doc.access) && /*#__PURE__*/React.createElement("button", {
     className: "danger-text",
     onClick: () => documentAction('delete', doc)
   }, /*#__PURE__*/React.createElement(Trash2, {
@@ -589,11 +626,11 @@ function Dashboard({
   }), "Delete"))), /*#__PURE__*/React.createElement("button", {
     className: "doc-card-body",
     onClick: () => navigate(`/docs/${doc.id}`)
-  }, /*#__PURE__*/React.createElement("strong", null, doc.title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, doc.access === 'owner' ? 'Your document' : `Shared by ${doc.owner}`, " \xB7 ", relativeTime(doc.updated_at))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("strong", null, doc.title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, ['owner', 'full'].includes(doc.access) ? 'Your document' : `Shared by ${doc.owner}`, " \xB7 ", relativeTime(doc.updated_at))), /*#__PURE__*/React.createElement("div", {
     className: "doc-card-foot"
   }, /*#__PURE__*/React.createElement("span", {
     className: `access-pill ${doc.access}`
-  }, doc.access === 'owner' ? 'Owner' : doc.access === 'write' ? 'Can edit' : 'Can view'), /*#__PURE__*/React.createElement("span", {
+  }, doc.access === 'owner' ? 'Owner' : doc.access === 'full' ? 'Full access' : doc.access === 'write' ? 'Can edit' : 'Can view'), /*#__PURE__*/React.createElement("span", {
     className: "collab-dots"
   }, /*#__PURE__*/React.createElement("i", null, (user?.username?.[0] || 'Y').toUpperCase()), doc.access !== 'owner' && /*#__PURE__*/React.createElement("i", null, "\u2197")))))), /*#__PURE__*/React.createElement("div", {
     className: "tip-card"
@@ -608,6 +645,8 @@ function Dashboard({
 function Editor({
   user,
   online,
+  theme,
+  onToggleTheme,
   onSignOut
 }) {
   const {
@@ -618,6 +657,11 @@ function Editor({
   const [document, setDocument] = useState(null);
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [localCursor, setLocalCursor] = useState({
+    line: 1,
+    column: 1
+  });
   const [access, setAccess] = useState('read');
   const [status, setStatus] = useState('Loading document');
   const [people, setPeople] = useState([]);
@@ -642,7 +686,8 @@ function Editor({
   const inFlightRef = useRef(null);
   const allowReconnectRef = useRef(false);
   const localEditRef = useRef(false);
-  const canWrite = access === 'owner' || access === 'write';
+  const canWrite = ['owner', 'write', 'full'].includes(access);
+  const canManage = access === 'owner' || access === 'full';
   const applyContent = useCallback(next => {
     contentRef.current = next;
     setContent(next);
@@ -654,7 +699,7 @@ function Editor({
       try {
         const doc = await api(`documents/${id}/`);
         if (disposed) return;
-        const canEditDraft = ['owner', 'write'].includes(doc.access);
+        const canEditDraft = ['owner', 'write', 'full'].includes(doc.access);
         const draft = cached?.pending && canEditDraft ? cached : null;
         const localTitle = cached?.titlePending && canEditDraft ? cached.title : doc.title;
         const merged = draft ? mergeText(draft.baseContent || '', draft.content || '', doc.content || '') : doc.content || '';
@@ -976,6 +1021,11 @@ function Editor({
     }
   }
   function sendCursor(target) {
+    const position = target.selectionEnd;
+    setLocalCursor({
+      line: lineAt(contentRef.current, position),
+      column: columnAt(contentRef.current, position)
+    });
     const socket = socketRef.current;
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({
       type: 'cursor.update',
@@ -987,6 +1037,19 @@ function Editor({
     setShareOpen(true);
     try {
       setShares(await api(`documents/${id}/share/`));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  async function removeShare(username) {
+    try {
+      await api(`documents/${id}/share/`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          username
+        })
+      });
+      setShares(old => old.filter(item => item.username !== username));
     } catch (err) {
       setError(err.message);
     }
@@ -1070,16 +1133,39 @@ function Editor({
     className: "crumb-link"
   }, "My workspace"), /*#__PURE__*/React.createElement("span", {
     className: "crumb-slash"
-  }, "/"), /*#__PURE__*/React.createElement("input", {
+  }, "/"), titleEditing && canWrite ? /*#__PURE__*/React.createElement("input", {
     className: "title-input",
+    autoFocus: true,
     value: title,
     onChange: e => changeTitle(e.target.value),
-    onBlur: saveTitle,
-    disabled: !canWrite,
+    onBlur: () => {
+      saveTitle();
+      setTitleEditing(false);
+    },
+    onKeyDown: e => {
+      if (e.key === 'Enter') e.currentTarget.blur();
+      if (e.key === 'Escape') {
+        setTitle(document.title);
+        titleRef.current = document.title;
+        setTitleEditing(false);
+      }
+    },
     "aria-label": "Document title"
-  })), /*#__PURE__*/React.createElement("div", {
+  }) : /*#__PURE__*/React.createElement("button", {
+    className: "title-display",
+    onDoubleClick: () => canWrite && setTitleEditing(true),
+    title: canWrite ? 'Double-click to rename' : undefined
+  }, title)), /*#__PURE__*/React.createElement("div", {
     className: "editor-actions"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "theme-toggle",
+    onClick: onToggleTheme,
+    "aria-label": `Switch to ${theme === 'light' ? 'dark' : 'light'} mode`
+  }, theme === 'light' ? /*#__PURE__*/React.createElement(Moon, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Sun, {
+    size: 16
+  }), /*#__PURE__*/React.createElement("span", null, theme === 'light' ? 'Dark' : 'Light')), /*#__PURE__*/React.createElement("div", {
     className: "save-indicator"
   }, /*#__PURE__*/React.createElement("span", {
     className: `save-dot ${online ? '' : 'offline'}`
@@ -1096,7 +1182,7 @@ function Editor({
     title: `You · ${access}`
   }, user?.username?.[0]?.toUpperCase() || 'Y')), /*#__PURE__*/React.createElement("div", {
     className: "toolbar-separator"
-  }), access === 'owner' && /*#__PURE__*/React.createElement("button", {
+  }), canManage && /*#__PURE__*/React.createElement("button", {
     className: "button share-button",
     onClick: openShares
   }, /*#__PURE__*/React.createElement(Share2, {
@@ -1125,7 +1211,7 @@ function Editor({
     onClick: duplicate
   }, /*#__PURE__*/React.createElement(FilePlus2, {
     size: 14
-  }), "Make a copy"), access === 'owner' && /*#__PURE__*/React.createElement("button", {
+  }), "Make a copy"), canManage && /*#__PURE__*/React.createElement("button", {
     className: "danger-text",
     onClick: deleteDocument
   }, /*#__PURE__*/React.createElement(Trash2, {
@@ -1140,33 +1226,32 @@ function Editor({
     className: "editor-canvas"
   }, /*#__PURE__*/React.createElement("div", {
     className: "paper-kicker"
-  }, /*#__PURE__*/React.createElement("span", null, "WORKING DOCUMENT"), /*#__PURE__*/React.createElement("span", null, access === 'owner' ? 'PRIVATE SPACE' : access === 'write' ? 'SHARED · CAN EDIT' : 'SHARED · READ ONLY')), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "WORKING DOCUMENT"), /*#__PURE__*/React.createElement("span", null, access === 'owner' ? 'PRIVATE SPACE' : access === 'full' ? 'SHARED · FULL ACCESS' : access === 'write' ? 'SHARED · CAN EDIT' : 'SHARED · READ ONLY')), /*#__PURE__*/React.createElement("div", {
     className: "document-heading"
   }, /*#__PURE__*/React.createElement("div", {
     className: "document-icon"
   }, /*#__PURE__*/React.createElement(FileText, {
     size: 18
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", null, title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, "Edited ", relativeTime(document.updated_at), " ", /*#__PURE__*/React.createElement("span", null, "\xB7"), " ", people.length + 1, " in this space"))), error && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
+    onDoubleClick: () => canWrite && setTitleEditing(true),
+    title: canWrite ? 'Double-click to rename' : undefined
+  }, title || 'Untitled document'), /*#__PURE__*/React.createElement("p", null, "Edited ", relativeTime(document.updated_at), " ", /*#__PURE__*/React.createElement("span", null, "\xB7"), " ", people.length + 1, " in this space"))), error && /*#__PURE__*/React.createElement("div", {
     className: "error-banner editor-error"
   }, error, /*#__PURE__*/React.createElement("button", {
     onClick: () => setError('')
   }, /*#__PURE__*/React.createElement(X, {
     size: 14
-  }))), cursorPeople.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "cursor-strip"
-  }, cursorPeople.map(person => /*#__PURE__*/React.createElement("span", {
-    key: person.user_id
-  }, /*#__PURE__*/React.createElement("i", {
-    style: {
-      background: palette[person.user_id % palette.length]
-    }
-  }), person.username, " ", /*#__PURE__*/React.createElement("small", null, "Line ", lineAt(content, person.head), ", col ", columnAt(content, person.head))))), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     className: "editor-tools"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "text-tool"
-  }, "T"), /*#__PURE__*/React.createElement("span", {
-    className: "toolbar-vertical"
-  }), /*#__PURE__*/React.createElement("span", null, "Plain text"), /*#__PURE__*/React.createElement("span", {
+    className: "cursor-location self-cursor"
+  }, /*#__PURE__*/React.createElement("i", null), user?.username || 'You', " ", /*#__PURE__*/React.createElement("b", null, "Line ", localCursor.line), /*#__PURE__*/React.createElement("b", null, "Col ", localCursor.column)), cursorPeople.map(person => /*#__PURE__*/React.createElement("span", {
+    className: "cursor-location remote-cursor",
+    key: person.user_id,
+    style: {
+      '--cursor-color': palette[person.user_id % palette.length]
+    }
+  }, /*#__PURE__*/React.createElement("i", null), person.username, /*#__PURE__*/React.createElement("b", null, "Line ", lineAt(content, person.head)), /*#__PURE__*/React.createElement("b", null, "Col ", columnAt(content, person.head)))), /*#__PURE__*/React.createElement("span", {
     className: "tool-spacer"
   }), !canWrite && /*#__PURE__*/React.createElement("span", {
     className: "read-only-label"
@@ -1195,19 +1280,21 @@ function Editor({
     className: "presence-row"
   }, /*#__PURE__*/React.createElement("span", {
     className: "presence-avatar self"
-  }, user?.username?.[0]?.toUpperCase() || 'Y'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "You"), /*#__PURE__*/React.createElement("small", null, access === 'owner' ? 'Owner · full access' : access === 'write' ? 'Editor · can edit' : 'Viewer · can read')), /*#__PURE__*/React.createElement("span", {
+  }, user?.username?.[0]?.toUpperCase() || 'Y'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "You"), /*#__PURE__*/React.createElement("small", null, access === 'owner' ? 'Owner · full access' : access === 'full' ? 'Full access · can manage' : access === 'write' ? 'Editor · can edit' : 'Viewer · can read')), /*#__PURE__*/React.createElement("span", {
     className: "live-pip"
   })), people.filter(person => person.user_id !== user?.id).map(person => {
     const cursor = cursors[person.user_id];
     return /*#__PURE__*/React.createElement("div", {
-      className: "presence-row",
+      className: `presence-row ${cursor ? 'cursor-row-active' : ''}`,
       key: person.user_id
     }, /*#__PURE__*/React.createElement("span", {
       className: "presence-avatar",
       style: {
         backgroundColor: palette[person.user_id % palette.length]
       }
-    }, person.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, person.username), /*#__PURE__*/React.createElement("small", null, cursor ? `Line ${lineAt(content, cursor.head)} · column ${columnAt(content, cursor.head)}` : 'In this document')), /*#__PURE__*/React.createElement("span", {
+    }, person.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, person.username), /*#__PURE__*/React.createElement("small", null, cursor ? /*#__PURE__*/React.createElement("span", {
+      className: "location-highlight"
+    }, "Row ", lineAt(content, cursor.head), " \xB7 Col ", columnAt(content, cursor.head)) : 'Finding a place…')), /*#__PURE__*/React.createElement("span", {
       className: "live-pip"
     }));
   })), /*#__PURE__*/React.createElement("div", {
@@ -1220,7 +1307,7 @@ function Editor({
     className: "detail-row"
   }, /*#__PURE__*/React.createElement("span", null, "Last saved"), /*#__PURE__*/React.createElement("strong", null, status.startsWith('Offline') ? 'On this device' : status === 'Saved' ? 'Just now' : status)), /*#__PURE__*/React.createElement("div", {
     className: "detail-row"
-  }, /*#__PURE__*/React.createElement("span", null, "Access"), /*#__PURE__*/React.createElement("strong", null, access === 'owner' ? 'Only you' : access === 'write' ? 'Can edit' : 'Can view')), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "Access"), /*#__PURE__*/React.createElement("strong", null, access === 'owner' ? 'Only you' : access === 'full' ? 'Full access' : access === 'write' ? 'Can edit' : 'Can view')), /*#__PURE__*/React.createElement("div", {
     className: "detail-row"
   }, /*#__PURE__*/React.createElement("span", null, "Word count"), /*#__PURE__*/React.createElement("strong", null, content.trim() ? content.trim().split(/\s+/).length : 0))), /*#__PURE__*/React.createElement("div", {
     className: "offline-card"
@@ -1253,7 +1340,7 @@ function Editor({
     size: 18
   }))), /*#__PURE__*/React.createElement("p", {
     className: "muted"
-  }, "Invite a Collab Editor account with the access they need."), /*#__PURE__*/React.createElement("div", {
+  }, "Invite a Collab Editor user and choose their access."), /*#__PURE__*/React.createElement("div", {
     className: "invite-row"
   }, /*#__PURE__*/React.createElement("input", {
     value: shareUser,
@@ -1266,12 +1353,12 @@ function Editor({
     value: shareAccess,
     onChange: e => setShareAccess(e.target.value)
   }, /*#__PURE__*/React.createElement("option", {
+    value: "full"
+  }, "Full access \xB7 manage and delete"), /*#__PURE__*/React.createElement("option", {
     value: "write"
   }, "Can edit"), /*#__PURE__*/React.createElement("option", {
     value: "read"
-  }, "Can view"), /*#__PURE__*/React.createElement("option", {
-    value: "none"
-  }, "No access")), /*#__PURE__*/React.createElement("button", {
+  }, "Can view")), /*#__PURE__*/React.createElement("button", {
     className: "button primary",
     disabled: !shareUser.trim(),
     onClick: () => updateShare(shareUser.trim(), shareAccess)
@@ -1291,21 +1378,27 @@ function Editor({
     style: {
       backgroundColor: palette[share.id % palette.length]
     }
-  }, share.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, share.username), /*#__PURE__*/React.createElement("small", null, share.email || 'Collab Editor member')), /*#__PURE__*/React.createElement("select", {
+  }, share.username?.[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, share.username), /*#__PURE__*/React.createElement("small", null, share.email || 'Relay member')), /*#__PURE__*/React.createElement("select", {
     "aria-label": `Access for ${share.username}`,
     value: share.access,
     onChange: e => updateShare(share.username, e.target.value)
   }, /*#__PURE__*/React.createElement("option", {
+    value: "full"
+  }, "Full access"), /*#__PURE__*/React.createElement("option", {
     value: "write"
   }, "Can edit"), /*#__PURE__*/React.createElement("option", {
     value: "read"
   }, "Can view"), /*#__PURE__*/React.createElement("option", {
     value: "none"
-  }, "No access")))), /*#__PURE__*/React.createElement("div", {
+  }, "No access")), /*#__PURE__*/React.createElement("button", {
+    className: "remove-member",
+    onClick: () => removeShare(share.username),
+    "aria-label": `Remove ${share.username}`
+  }, "Remove"))), /*#__PURE__*/React.createElement("div", {
     className: "share-note"
   }, /*#__PURE__*/React.createElement(Shield, {
     size: 14
-  }), " Access can be changed or removed by the owner at any time."))));
+  }), " Full access lets trusted collaborators edit, delete, and manage sharing. Change or remove access at any time."))));
 }
 function relativeTime(value) {
   if (!value) return 'just now';
