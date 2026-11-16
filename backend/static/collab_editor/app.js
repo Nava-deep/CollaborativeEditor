@@ -151,7 +151,6 @@ const Star = makeIcon('Star');
 const Pencil = makeIcon('Pencil');
 const Plus = makeIcon('Plus');
 const Search = makeIcon('Search');
-const Settings2 = makeIcon('Settings2');
 const Share2 = makeIcon('Share2');
 const Shield = makeIcon('Shield');
 const Sparkles = makeIcon('Sparkles');
@@ -468,7 +467,8 @@ function Dashboard({
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortNewestFirst, setSortNewestFirst] = useState(true);
+  const [sortMode, setSortMode] = useState('recent');
+  const searchInputRef = useRef(null);
   const [error, setError] = useState('');
   const [menu, setMenu] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -538,6 +538,21 @@ function Dashboard({
       document.removeEventListener('keydown', dismissOnEscape);
     };
   }, [workspaceMenuOpen]);
+  useEffect(() => {
+    function handleSearchShortcut(event) {
+      const active = event.target;
+      const typing = active instanceof HTMLElement && active.closest('input, textarea, select, [contenteditable="true"]');
+      if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey && !typing) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (event.key === 'Escape' && document.activeElement === searchInputRef.current && search) {
+        event.preventDefault();
+        setSearch('');
+      }
+    }
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, [search]);
   async function createDocument() {
     setCreating(true);
     try {
@@ -580,7 +595,14 @@ function Dashboard({
     }
   }
   const searchQuery = search.trim().normalize('NFKC').toLocaleLowerCase();
-  const filtered = useMemo(() => documents.filter(doc => (!showStarred || favoriteIds.has(String(doc.id))) && (!searchQuery || `${doc.title || ''} ${doc.owner || ''}`.normalize('NFKC').toLocaleLowerCase().includes(searchQuery))).sort((first, second) => sortNewestFirst ? new Date(second.updated_at) - new Date(first.updated_at) : new Date(first.updated_at) - new Date(second.updated_at)), [documents, searchQuery, sortNewestFirst, showStarred, favoriteIds]);
+  const filtered = useMemo(() => documents.filter(doc => (!showStarred || favoriteIds.has(String(doc.id))) && (!searchQuery || `${doc.title || ''} ${doc.owner || ''}`.normalize('NFKC').toLocaleLowerCase().includes(searchQuery))).sort((first, second) => {
+    if (sortMode === 'title') return String(first.title || '').localeCompare(String(second.title || ''), undefined, {
+      sensitivity: 'base'
+    });
+    const firstUpdated = new Date(first.updated_at).getTime() || 0;
+    const secondUpdated = new Date(second.updated_at).getTime() || 0;
+    return sortMode === 'oldest' ? firstUpdated - secondUpdated : secondUpdated - firstUpdated;
+  }), [documents, searchQuery, sortMode, showStarred, favoriteIds]);
   const favoriteCount = documents.filter(doc => favoriteIds.has(String(doc.id))).length;
   return /*#__PURE__*/React.createElement("div", {
     className: "dashboard-shell"
@@ -703,27 +725,49 @@ function Dashboard({
     size: 15
   }))), /*#__PURE__*/React.createElement("div", {
     className: "library-heading"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", null, "Recent documents"), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", null, searchQuery ? 'Search results' : showStarred ? 'Starred documents' : 'Recent documents'), /*#__PURE__*/React.createElement("span", {
     className: "count"
-  }, documents.length)), /*#__PURE__*/React.createElement("div", {
+  }, searchQuery || showStarred ? filtered.length : documents.length)), /*#__PURE__*/React.createElement("div", {
     className: "library-tools"
   }, /*#__PURE__*/React.createElement("label", {
-    className: "search-box"
+    className: `search-box ${search ? 'has-query' : ''}`
   }, /*#__PURE__*/React.createElement(Search, {
-    size: 16
+    className: "search-icon",
+    size: 17
   }), /*#__PURE__*/React.createElement("input", {
+    ref: searchInputRef,
     type: "search",
-    "aria-label": "Filter documents by title or owner",
-    placeholder: "Find a document",
+    "aria-label": "Search documents by title or owner",
+    placeholder: "Search your documents",
     value: search,
     onChange: e => setSearch(e.target.value)
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "icon-btn bordered",
-    title: sortNewestFirst ? 'Oldest edited first' : 'Newest edited first',
-    "aria-label": sortNewestFirst ? 'Oldest edited first' : 'Newest edited first',
-    onClick: () => setSortNewestFirst(value => !value)
-  }, /*#__PURE__*/React.createElement(Settings2, {
-    size: 17
+  }), search ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "search-clear",
+    "aria-label": "Clear search",
+    title: "Clear search",
+    onClick: () => {
+      setSearch('');
+      searchInputRef.current?.focus();
+    }
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 15
+  })) : /*#__PURE__*/React.createElement("kbd", {
+    className: "search-shortcut"
+  }, "/")), /*#__PURE__*/React.createElement("label", {
+    className: "sort-control"
+  }, /*#__PURE__*/React.createElement("span", null, "Sort"), /*#__PURE__*/React.createElement("select", {
+    value: sortMode,
+    onChange: e => setSortMode(e.target.value),
+    "aria-label": "Sort documents"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "recent"
+  }, "Recently edited"), /*#__PURE__*/React.createElement("option", {
+    value: "oldest"
+  }, "Least recent"), /*#__PURE__*/React.createElement("option", {
+    value: "title"
+  }, "Title A\u2013Z")), /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 14
   })))), /*#__PURE__*/React.createElement("div", {
     className: "library-filter-row",
     role: "group",
@@ -739,8 +783,9 @@ function Dashboard({
   }, /*#__PURE__*/React.createElement(Star, {
     size: 14
   }), " Starred ", /*#__PURE__*/React.createElement("span", null, favoriteCount)), /*#__PURE__*/React.createElement("span", {
-    className: "filter-caption"
-  }, "Your shortcuts, saved in this browser")), loading ? /*#__PURE__*/React.createElement("div", {
+    className: "filter-caption",
+    "aria-live": "polite"
+  }, searchQuery ? `${filtered.length} result${filtered.length === 1 ? '' : 's'} for “${search.trim()}”` : showStarred ? `${filtered.length} starred shortcut${filtered.length === 1 ? '' : 's'}` : 'Search by title or owner · Press /')), loading ? /*#__PURE__*/React.createElement("div", {
     className: "loading-state"
   }, /*#__PURE__*/React.createElement(LoaderCircle, {
     className: "spin"
